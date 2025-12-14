@@ -1,14 +1,14 @@
 # Utiliser l'image Node.js officielle
 FROM node:20-alpine
 
-# Créer le répertoire de l'application
+# Creer le repertoire de l'application
 WORKDIR /usr/src/app
 
-# Copier les fichiers de dépendances
+# Copier les fichiers de dependances
 COPY package*.json ./
 
-# Installer les dépendances
-RUN npm ci --only=production
+# Installer les dependances
+RUN npm install --omit=dev
 
 # Copier le code source
 COPY . .
@@ -16,5 +16,5 @@ COPY . .
 # Exposer le port de l'application
 EXPOSE 9001
 
-# Commande pour démarrer l'application
+# Commande pour demarrer l'application
 CMD ["node", "src/server.js"]
