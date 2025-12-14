@@ -1,0 +1,15 @@
+version: '3.8'
+
+services:
+  # Service API
+  api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: hacklab-api
+    restart: unless-stopped
+    ports:
+      - "${PORT:-9001}:9001"
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: ${PORT:-9001}
