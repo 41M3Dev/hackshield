@@ -23,22 +23,18 @@ const UserSchema = new mongoose.Schema({
         type:String,
         required:true,
         unique:true,
-        trim:true,
-        minlength: [3, 'Username trop court (min 3)'],
-        maxlength: [30, 'Username trop long (max 30)']
+        trim:true
     },
     email:{
         type:String,
         required:true,
         unique:true,
         trim:true,
-        lowercase:true,
-        match: [/^\S+@\S+\.\S+$/, 'Email invalide']
+        lowercase:true
     },
     password:{
         type: String, 
-        required: [true, 'Mot de passe requis'],
-        minlength: [8, 'Mot de passe trop court (min 8)'],
+        required:true,
         select: false
     },
     role:{
