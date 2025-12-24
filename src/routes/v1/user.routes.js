@@ -1,65 +1,37 @@
 const express = require('express');
 const router = express.Router();
 
+// Controllers
+const {
+    createUser,
+    getUsers,
+    getUserById,
+    getMe,
+    updateUser,
+    deleteUser
+} = require('../../controllers/user.controller');
+
 // Middlewares
-const validate = require('../middlewares/validate.middleware');
-const auth = require('../middlewares/auth.middleware');
-const isSelf = require('../middlewares/isSelf.middleware');
-const isAdmin = require('../middlewares/isAdmin.middleware');
+const auth = require('../../middlewares/auth.middleware');
+const isAdmin = require('../../middlewares/isAdmin.middleware');
+const isSelf = require('../../middlewares/isSelf.middleware');
 
 // Validators
-const UserValidators = require('../validators/User.validators');
+const validate = require('../../middlewares/validate.middleware');
+const { createUserValidator, updateUserValidator } = require('../../validators/user.validator');
 
-// Controllers
-const userController = require('../controllers/user.controller');
+/**
+ * Admin routes
+ */
+router.post('/', auth, isAdmin, validate(createUserValidator), createUser);
+router.get('/', auth, isAdmin, getUsers);
 
-/*
-|--------------------------------------------------------------------------
-| USER — routes utilisateur connecté
-|--------------------------------------------------------------------------
-*/
+/**
+ * User routes
+ */
+router.get('/me', auth, getMe);
+router.get('/:id', auth, isSelf, getUserById);
+router.put('/:id', auth, isSelf, validate(updateUserValidator), updateUser);
+router.delete('/:id', auth, isAdmin, deleteUser);
 
-// Récupérer son profil
-router.get('/me',auth,userController.getMe
-);
-
-// Mettre à jour son profil
-router.patch(
-    '/me',
-    auth,
-    validate(UserValidators.updateProfile),
-    userController.updateMe
-);
-
-// Changer son mot de passe
-router.patch(
-    '/me/password',
-    auth,
-    validate(UserValidators.updatePassword),
-    userController.updatePassword
-);
-
-/*
-|--------------------------------------------------------------------------
-| ADMIN — gestion utilisateurs
-|--------------------------------------------------------------------------
-*/
-
-// Récupérer un utilisateur par UUID
-router.get(
-    '/admin/users/:uuid',
-    auth,
-    isAdmin,
-    validate(UserValidators.paramsUuid, 'params'),
-    userController.getUserByUuid
-);
-
-// Modifier un utilisateur (admin)
-router.patch(
-    '/admin/users/:uuid',
-    auth,
-    isAdmin,
-    validate(UserValidators.adminUpdateUser),
-    validate(UserValidators.paramsUuid, 'params'),
-    userController.adminUpdateUser
-);
+module.exports = router;
