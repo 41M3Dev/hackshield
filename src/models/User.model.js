@@ -77,8 +77,19 @@ const UserSchema = new mongoose.Schema({
         deletedAt: {
             type: Date,
             default: null
-        }
-
+        },
+        refreshTokens: [{
+            token: String,
+            createdAt: Date
+        }],
+        emailVerified: {
+            type: Boolean,
+            default: false
+        },
+        emailVerificationToken: String,
+        emailVerificationExpires: Date,
+        resetPasswordToken: String,
+        resetPasswordExpires: Date
 
     },
 {
