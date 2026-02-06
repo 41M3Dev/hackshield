@@ -1,5 +1,9 @@
 const mongoose = require('mongoose');
 
+/**
+ * Middleware qui vérifie si l'utilisateur accède à ses propres ressources
+ * Supporte la comparaison par UUID ou par ObjectId MongoDB
+ */
 module.exports = (req, res, next) => {
     try {
         // Supporte uuid ou id
@@ -9,12 +13,24 @@ module.exports = (req, res, next) => {
             return res.status(400).json({ message: 'Paramètre utilisateur manquant' });
         }
 
-        // Si paramId est un ObjectId, on le transforme en string pour comparer
-        const userId = mongoose.isValidObjectId(paramId) ? paramId.toString() : paramId;
+        // Vérifier si c'est un ObjectId MongoDB
+        const isObjectId = mongoose.isValidObjectId(paramId);
 
-        if (req.user.uuid !== userId) {
-            // Audit log (optionnel)
-            console.warn(`Access denied for user ${req.user.uuid} on ${paramId}`);
+        // Comparer avec l'ID approprié du token JWT
+        let isAuthorized = false;
+
+        if (isObjectId && req.user.id) {
+            // Comparaison par ObjectId MongoDB
+            isAuthorized = req.user.id.toString() === paramId.toString();
+        }
+
+        if (!isAuthorized && req.user.uuid) {
+            // Comparaison par UUID
+            isAuthorized = req.user.uuid === paramId;
+        }
+
+        if (!isAuthorized) {
+            console.warn(`Access denied for user ${req.user.uuid || req.user.id} on ${paramId}`);
             return res.status(403).json({ message: 'Accès interdit' });
         }
 
