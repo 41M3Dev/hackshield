@@ -2,7 +2,11 @@ const jwt = require('jsonwebtoken');
 
 exports.generateAccessToken = (user) => {
     return jwt.sign(
-        { uuid: user.uuid, role: user.role },
+        {
+            id: user._id,
+            uuid: user.uuid,
+            role: user.role
+        },
         process.env.JWT_ACCESS_SECRET,
         { expiresIn: '15m' }
     );

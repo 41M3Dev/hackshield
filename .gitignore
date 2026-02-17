@@ -76,3 +76,4 @@ mongo-data/
 
 # Docker local volumes
 docker/mongo-data/
+/.claude/

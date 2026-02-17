@@ -89,7 +89,40 @@ const UserSchema = new mongoose.Schema({
         emailVerificationToken: String,
         emailVerificationExpires: Date,
         resetPasswordToken: String,
-        resetPasswordExpires: Date
+        resetPasswordExpires: Date,
+
+        // Brute Force Protection
+        loginAttempts: {
+            type: Number,
+            default: 0
+        },
+        lockUntil: {
+            type: Date,
+            default: null
+        },
+
+        // Two-Factor Authentication (2FA)
+        phoneNumber: {
+            type: String,
+            default: null,
+            trim: true
+        },
+        twoFactorEnabled: {
+            type: Boolean,
+            default: false
+        },
+        twoFactorCode: {
+            type: String,
+            select: false
+        },
+        twoFactorExpires: {
+            type: Date,
+            select: false
+        },
+        twoFactorVerified: {
+            type: Boolean,
+            default: false
+        }
 
     },
 {
@@ -108,6 +141,41 @@ UserSchema.pre('save', async function(next) {
 // Pour vérifier le mot de passe lors du login
 UserSchema.methods.comparePassword = async function(candidatePassword) {
     return await bcrypt.compare(candidatePassword, this.password);
+};
+
+// Virtual pour vérifier si le compte est verrouillé
+UserSchema.virtual('isLocked').get(function() {
+    return !!(this.lockUntil && this.lockUntil > Date.now());
+});
+
+// Incrémenter les tentatives de login
+UserSchema.methods.incrementLoginAttempts = async function() {
+    // Si le verrouillage a expiré, réinitialiser
+    if (this.lockUntil && this.lockUntil < Date.now()) {
+        return this.updateOne({
+            $set: { loginAttempts: 1 },
+            $unset: { lockUntil: 1 }
+        });
+    }
+
+    const updates = { $inc: { loginAttempts: 1 } };
+    const maxAttempts = 5; // Nombre maximum de tentatives
+    const lockTime = 15 * 60 * 1000; // 15 minutes en millisecondes
+
+    // Verrouiller le compte après maxAttempts tentatives
+    if (this.loginAttempts + 1 >= maxAttempts && !this.isLocked) {
+        updates.$set = { lockUntil: Date.now() + lockTime };
+    }
+
+    return this.updateOne(updates);
+};
+
+// Réinitialiser les tentatives après un login réussi
+UserSchema.methods.resetLoginAttempts = async function() {
+    return this.updateOne({
+        $set: { loginAttempts: 0 },
+        $unset: { lockUntil: 1 }
+    });
 };
 
 UserSchema.index({ email: 1 }, { unique: true });
