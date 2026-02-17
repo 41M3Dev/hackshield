@@ -1,4 +1,6 @@
-const User = require('../models/User.model');
+// Prisma remplace Mongoose — toutes les opérations DB utilisent prisma client
+const prisma = require('../config/db');
+const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const { generateAccessToken, generateRefreshToken } = require('../utils/token');
@@ -14,27 +16,34 @@ exports.register = async (req, res, next) => {
         const emailVerificationToken = crypto.randomBytes(32).toString('hex');
         const emailVerificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24h
 
-        const user = await User.create({
-            email: req.body.email,
-            password: req.body.password,
-            firstName: req.body.firstName,
-            lastName: req.body.lastName,
-            username: req.body.username,
-            company: req.body.company,
-            emailVerificationToken,
-            emailVerificationExpires
+        // Hash du mot de passe dans le controller (plus de pre-save hook Mongoose)
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash(req.body.password, salt);
+
+        const user = await prisma.user.create({
+            data: {
+                email: req.body.email,
+                password: hashedPassword,
+                firstName: req.body.firstName,
+                lastName: req.body.lastName,
+                username: req.body.username,
+                company: req.body.company,
+                emailVerificationToken,
+                emailVerificationExpires
+            }
         });
 
         // Générer les tokens JWT
         const accessToken = generateAccessToken(user);
         const refreshToken = generateRefreshToken(user);
 
-        // Sauvegarder le refresh token en DB
-        user.refreshTokens.push({
-            token: refreshToken,
-            createdAt: new Date()
+        // Sauvegarder le refresh token dans la table séparée RefreshToken (plus de tableau embarqué)
+        await prisma.refreshToken.create({
+            data: {
+                token: refreshToken,
+                userId: user.id
+            }
         });
-        await user.save();
 
         // Envoyer l'email de vérification
         try {
@@ -44,10 +53,8 @@ exports.register = async (req, res, next) => {
             // On continue même si l'email ne part pas
         }
 
-        const data = user.toObject();
-        delete data.password;
-        delete data.emailVerificationToken;
-        delete data.refreshTokens;
+        // Exclure les champs sensibles de la réponse (plus de toObject/delete)
+        const { password, emailVerificationToken: _token, ...data } = user;
 
         res.status(201).json({
             success: true,
@@ -57,8 +64,9 @@ exports.register = async (req, res, next) => {
             message: 'Inscription réussie. Veuillez vérifier votre email.'
         });
     } catch (error) {
-        if (error.code === 11000) {
-            const field = Object.keys(error.keyPattern)[0];
+        // Erreur de contrainte unique Prisma (remplace error.code === 11000)
+        if (error.code === 'P2002') {
+            const field = error.meta?.target?.[0];
             return res.status(409).json({
                 success: false,
                 message: `${field === 'email' ? 'Cet email' : 'Ce nom d\'utilisateur'} est déjà utilisé`
@@ -75,10 +83,13 @@ exports.login = async (req, res, next) => {
     try {
         const { login, password } = req.body;
 
-        const user = await User.findOne({
-            $or: [{ email: login }, { username: login }],
-            isDeleted: false
-        }).select('+password');
+        // findFirst avec OR pour email/username (remplace $or Mongoose)
+        const user = await prisma.user.findFirst({
+            where: {
+                OR: [{ email: login }, { username: login }],
+                isDeleted: false
+            }
+        });
 
         if (!user) {
             return res.status(401).json({
@@ -87,8 +98,9 @@ exports.login = async (req, res, next) => {
             });
         }
 
-        // ✅ BRUTE FORCE PROTECTION: Vérifier si le compte est verrouillé
-        if (user.isLocked) {
+        // Vérifier si le compte est verrouillé (remplace le virtual isLocked)
+        const isLocked = !!(user.lockUntil && user.lockUntil > new Date());
+        if (isLocked) {
             const remainingTime = Math.ceil((user.lockUntil - Date.now()) / 60000);
             return res.status(423).json({
                 success: false,
@@ -104,23 +116,35 @@ exports.login = async (req, res, next) => {
             });
         }
 
-        const isPasswordValid = await user.comparePassword(password);
+        // Comparaison bcrypt directe (plus de méthode Mongoose comparePassword)
+        const isPasswordValid = await bcrypt.compare(password, user.password);
 
-        // ✅ BRUTE FORCE PROTECTION: Incrémenter les tentatives si mot de passe incorrect
+        // Brute force protection : incrémenter les tentatives si mot de passe incorrect
         if (!isPasswordValid) {
-            await user.incrementLoginAttempts();
+            const maxAttempts = 5;
+            const lockTime = 15 * 60 * 1000; // 15 minutes
+            const newAttempts = user.loginAttempts + 1;
 
-            // Récupérer l'utilisateur mis à jour pour vérifier s'il vient d'être verrouillé
-            const updatedUser = await User.findById(user._id);
-            if (updatedUser.isLocked) {
+            // Prisma update remplace user.incrementLoginAttempts()
+            const updateData = { loginAttempts: newAttempts };
+            if (newAttempts >= maxAttempts) {
+                updateData.lockUntil = new Date(Date.now() + lockTime);
+            }
+
+            await prisma.user.update({
+                where: { id: user.id },
+                data: updateData
+            });
+
+            if (newAttempts >= maxAttempts) {
                 return res.status(423).json({
                     success: false,
                     message: 'Trop de tentatives échouées. Compte verrouillé pendant 15 minutes.',
-                    lockUntil: updatedUser.lockUntil
+                    lockUntil: updateData.lockUntil
                 });
             }
 
-            const attemptsLeft = 5 - updatedUser.loginAttempts;
+            const attemptsLeft = maxAttempts - newAttempts;
             return res.status(401).json({
                 success: false,
                 message: 'Identifiants incorrects',
@@ -128,18 +152,21 @@ exports.login = async (req, res, next) => {
             });
         }
 
-        // ✅ 2FA: Si activé, envoyer le code et attendre la vérification
+        // 2FA: Si activé, envoyer le code et attendre la vérification
         if (user.twoFactorEnabled) {
-            // Générer un code 2FA à 6 chiffres
             const twoFactorCode = Math.floor(100000 + Math.random() * 900000).toString();
             const twoFactorExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
-            user.twoFactorCode = twoFactorCode;
-            user.twoFactorExpires = twoFactorExpires;
-            user.twoFactorVerified = false;
-            await user.save();
+            // Prisma update remplace user.save() avec champs modifiés
+            await prisma.user.update({
+                where: { id: user.id },
+                data: {
+                    twoFactorCode,
+                    twoFactorExpires,
+                    twoFactorVerified: false
+                }
+            });
 
-            // Envoyer le code par SMS (service à implémenter)
             const { sendTwoFactorCode } = require('../services/sms.service');
             try {
                 await sendTwoFactorCode(user.phoneNumber, twoFactorCode);
@@ -155,30 +182,34 @@ exports.login = async (req, res, next) => {
                 success: true,
                 requiresTwoFactor: true,
                 message: 'Code 2FA envoyé par SMS',
-                userId: user._id // Temporaire pour la vérification
+                userId: user.id // UUID au lieu de _id
             });
         }
 
-        // ✅ BRUTE FORCE PROTECTION: Réinitialiser les tentatives après un login réussi
-        await user.resetLoginAttempts();
-
-        user.lastLogin = new Date();
+        // Réinitialiser les tentatives après un login réussi (remplace resetLoginAttempts)
+        await prisma.user.update({
+            where: { id: user.id },
+            data: {
+                loginAttempts: 0,
+                lockUntil: null,
+                lastLogin: new Date()
+            }
+        });
 
         // Générer les tokens
         const accessToken = generateAccessToken(user);
         const refreshToken = generateRefreshToken(user);
 
-        // Sauvegarder le refresh token
-        user.refreshTokens.push({
-            token: refreshToken,
-            createdAt: new Date()
+        // Sauvegarder le refresh token dans la table séparée
+        await prisma.refreshToken.create({
+            data: {
+                token: refreshToken,
+                userId: user.id
+            }
         });
 
-        await user.save();
-
-        const data = user.toObject();
-        delete data.password;
-        delete data.refreshTokens;
+        // Exclure les champs sensibles
+        const { password: _pwd, ...data } = user;
 
         res.status(200).json({
             success: true,
@@ -203,10 +234,10 @@ exports.logout = async (req, res) => {
     }
 
     try {
-        await User.updateOne(
-            { 'refreshTokens.token': refreshToken },
-            { $pull: { refreshTokens: { token: refreshToken } } }
-        );
+        // Supprimer le refresh token de la table séparée (remplace $pull sur le tableau)
+        await prisma.refreshToken.deleteMany({
+            where: { token: refreshToken }
+        });
 
         return res.json({ message: 'Déconnexion réussie' });
 
@@ -228,24 +259,24 @@ exports.refreshToken = async (req, res) => {
     }
 
     try {
-        // 1️⃣ Vérifier signature
+        // 1. Vérifier signature
         const payload = jwt.verify(
             refreshToken,
             process.env.JWT_REFRESH_SECRET
         );
 
-        // 2️⃣ Vérifier présence en DB
-        const user = await User.findOne({
-            uuid: payload.uuid,
-            'refreshTokens.token': refreshToken
+        // 2. Vérifier présence en DB via la table RefreshToken (remplace findOne avec refreshTokens.token)
+        const storedToken = await prisma.refreshToken.findUnique({
+            where: { token: refreshToken },
+            include: { user: true }
         });
 
-        if (!user) {
+        if (!storedToken || storedToken.userId !== payload.id) {
             return res.status(403).json({ message: 'Refresh token invalide' });
         }
 
-        // 3️⃣ Générer nouvel access token
-        const accessToken = generateAccessToken(user);
+        // 3. Générer nouvel access token
+        const accessToken = generateAccessToken(storedToken.user);
 
         return res.json({ accessToken });
 
@@ -268,9 +299,12 @@ exports.verifyEmail = async (req, res, next) => {
             });
         }
 
-        const user = await User.findOne({
-            emailVerificationToken: token,
-            emailVerificationExpires: { $gt: Date.now() }
+        // findFirst avec filtre sur date (remplace $gt Mongoose)
+        const user = await prisma.user.findFirst({
+            where: {
+                emailVerificationToken: token,
+                emailVerificationExpires: { gt: new Date() }
+            }
         });
 
         if (!user) {
@@ -280,10 +314,15 @@ exports.verifyEmail = async (req, res, next) => {
             });
         }
 
-        user.emailVerified = true;
-        user.emailVerificationToken = undefined;
-        user.emailVerificationExpires = undefined;
-        await user.save();
+        // prisma.update remplace user.save() avec champs modifiés
+        await prisma.user.update({
+            where: { id: user.id },
+            data: {
+                emailVerified: true,
+                emailVerificationToken: null,
+                emailVerificationExpires: null
+            }
+        });
 
         res.status(200).json({
             success: true,
@@ -301,7 +340,9 @@ exports.resendVerificationEmail = async (req, res, next) => {
     try {
         const { email } = req.body;
 
-        const user = await User.findOne({ email, isDeleted: false });
+        const user = await prisma.user.findFirst({
+            where: { email, isDeleted: false }
+        });
 
         if (!user) {
             return res.status(404).json({
@@ -321,9 +362,13 @@ exports.resendVerificationEmail = async (req, res, next) => {
         const emailVerificationToken = crypto.randomBytes(32).toString('hex');
         const emailVerificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
-        user.emailVerificationToken = emailVerificationToken;
-        user.emailVerificationExpires = emailVerificationExpires;
-        await user.save();
+        await prisma.user.update({
+            where: { id: user.id },
+            data: {
+                emailVerificationToken,
+                emailVerificationExpires
+            }
+        });
 
         await sendVerificationEmail(user.email, emailVerificationToken);
 
@@ -343,7 +388,9 @@ exports.forgotPassword = async (req, res, next) => {
     try {
         const { email } = req.body;
 
-        const user = await User.findOne({ email, isDeleted: false });
+        const user = await prisma.user.findFirst({
+            where: { email, isDeleted: false }
+        });
 
         // Pour des raisons de sécurité, on retourne toujours success même si l'utilisateur n'existe pas
         if (!user) {
@@ -357,9 +404,13 @@ exports.forgotPassword = async (req, res, next) => {
         const resetPasswordToken = crypto.randomBytes(32).toString('hex');
         const resetPasswordExpires = new Date(Date.now() + 60 * 60 * 1000); // 1h
 
-        user.resetPasswordToken = resetPasswordToken;
-        user.resetPasswordExpires = resetPasswordExpires;
-        await user.save();
+        await prisma.user.update({
+            where: { id: user.id },
+            data: {
+                resetPasswordToken,
+                resetPasswordExpires
+            }
+        });
 
         await sendPasswordResetEmail(user.email, resetPasswordToken);
 
@@ -386,9 +437,11 @@ exports.resetPassword = async (req, res, next) => {
             });
         }
 
-        const user = await User.findOne({
-            resetPasswordToken: token,
-            resetPasswordExpires: { $gt: Date.now() }
+        const user = await prisma.user.findFirst({
+            where: {
+                resetPasswordToken: token,
+                resetPasswordExpires: { gt: new Date() }
+            }
         });
 
         if (!user) {
@@ -398,15 +451,24 @@ exports.resetPassword = async (req, res, next) => {
             });
         }
 
-        // Mettre à jour le mot de passe
-        user.password = newPassword;
-        user.resetPasswordToken = undefined;
-        user.resetPasswordExpires = undefined;
+        // Hash du mot de passe dans le controller (plus de pre-save hook)
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash(newPassword, salt);
 
-        // Invalider tous les refresh tokens existants pour forcer une reconnexion
-        user.refreshTokens = [];
+        // Mettre à jour le mot de passe et invalider les tokens
+        await prisma.user.update({
+            where: { id: user.id },
+            data: {
+                password: hashedPassword,
+                resetPasswordToken: null,
+                resetPasswordExpires: null
+            }
+        });
 
-        await user.save();
+        // Invalider tous les refresh tokens (suppression dans la table séparée)
+        await prisma.refreshToken.deleteMany({
+            where: { userId: user.id }
+        });
 
         // Envoyer un email de confirmation
         try {
@@ -442,7 +504,9 @@ exports.enableTwoFactor = async (req, res, next) => {
             });
         }
 
-        const user = await User.findById(userId);
+        const user = await prisma.user.findUnique({
+            where: { id: userId }
+        });
 
         if (!user) {
             return res.status(404).json({
@@ -455,11 +519,16 @@ exports.enableTwoFactor = async (req, res, next) => {
         const twoFactorCode = Math.floor(100000 + Math.random() * 900000).toString();
         const twoFactorExpires = new Date(Date.now() + 10 * 60 * 1000);
 
-        user.phoneNumber = phoneNumber;
-        user.twoFactorCode = twoFactorCode;
-        user.twoFactorExpires = twoFactorExpires;
-        user.twoFactorVerified = false;
-        await user.save();
+        // prisma.update remplace user.save() avec champs modifiés
+        await prisma.user.update({
+            where: { id: userId },
+            data: {
+                phoneNumber,
+                twoFactorCode,
+                twoFactorExpires,
+                twoFactorVerified: false
+            }
+        });
 
         // Envoyer le code
         await sendTwoFactorCode(phoneNumber, twoFactorCode);
@@ -481,7 +550,9 @@ exports.verifyTwoFactorSetup = async (req, res, next) => {
         const { code } = req.body;
         const userId = req.user.id;
 
-        const user = await User.findById(userId).select('+twoFactorCode +twoFactorExpires');
+        const user = await prisma.user.findUnique({
+            where: { id: userId }
+        });
 
         if (!user) {
             return res.status(404).json({
@@ -497,7 +568,7 @@ exports.verifyTwoFactorSetup = async (req, res, next) => {
             });
         }
 
-        if (user.twoFactorExpires < Date.now()) {
+        if (user.twoFactorExpires < new Date()) {
             return res.status(400).json({
                 success: false,
                 message: 'Code expiré. Demandez un nouveau code.'
@@ -512,11 +583,15 @@ exports.verifyTwoFactorSetup = async (req, res, next) => {
         }
 
         // Activer le 2FA
-        user.twoFactorEnabled = true;
-        user.twoFactorVerified = true;
-        user.twoFactorCode = undefined;
-        user.twoFactorExpires = undefined;
-        await user.save();
+        await prisma.user.update({
+            where: { id: userId },
+            data: {
+                twoFactorEnabled: true,
+                twoFactorVerified: true,
+                twoFactorCode: null,
+                twoFactorExpires: null
+            }
+        });
 
         res.status(200).json({
             success: true,
@@ -534,7 +609,9 @@ exports.verifyTwoFactorLogin = async (req, res, next) => {
     try {
         const { userId, code } = req.body;
 
-        const user = await User.findById(userId).select('+twoFactorCode +twoFactorExpires');
+        const user = await prisma.user.findUnique({
+            where: { id: userId }
+        });
 
         if (!user) {
             return res.status(404).json({
@@ -550,7 +627,7 @@ exports.verifyTwoFactorLogin = async (req, res, next) => {
             });
         }
 
-        if (user.twoFactorExpires < Date.now()) {
+        if (user.twoFactorExpires < new Date()) {
             return res.status(400).json({
                 success: false,
                 message: 'Code expiré. Veuillez vous reconnecter.'
@@ -565,29 +642,32 @@ exports.verifyTwoFactorLogin = async (req, res, next) => {
         }
 
         // Code valide, compléter le login
-        user.twoFactorCode = undefined;
-        user.twoFactorExpires = undefined;
-        user.twoFactorVerified = true;
-        user.lastLogin = new Date();
-
-        // Réinitialiser les tentatives de login
-        await user.resetLoginAttempts();
+        await prisma.user.update({
+            where: { id: user.id },
+            data: {
+                twoFactorCode: null,
+                twoFactorExpires: null,
+                twoFactorVerified: true,
+                lastLogin: new Date(),
+                loginAttempts: 0,
+                lockUntil: null
+            }
+        });
 
         // Générer les tokens
         const accessToken = generateAccessToken(user);
         const refreshToken = generateRefreshToken(user);
 
-        user.refreshTokens.push({
-            token: refreshToken,
-            createdAt: new Date()
+        // Sauvegarder le refresh token dans la table séparée
+        await prisma.refreshToken.create({
+            data: {
+                token: refreshToken,
+                userId: user.id
+            }
         });
 
-        await user.save();
-
-        const data = user.toObject();
-        delete data.password;
-        delete data.refreshTokens;
-        delete data.twoFactorCode;
+        // Exclure les champs sensibles
+        const { password: _pwd, twoFactorCode: _code, ...data } = user;
 
         res.status(200).json({
             success: true,
@@ -608,7 +688,9 @@ exports.disableTwoFactor = async (req, res, next) => {
         const { password } = req.body;
         const userId = req.user.id;
 
-        const user = await User.findById(userId).select('+password');
+        const user = await prisma.user.findUnique({
+            where: { id: userId }
+        });
 
         if (!user) {
             return res.status(404).json({
@@ -617,8 +699,8 @@ exports.disableTwoFactor = async (req, res, next) => {
             });
         }
 
-        // Vérifier le mot de passe pour des raisons de sécurité
-        const isPasswordValid = await user.comparePassword(password);
+        // Vérifier le mot de passe (bcrypt.compare direct, plus de méthode Mongoose)
+        const isPasswordValid = await bcrypt.compare(password, user.password);
         if (!isPasswordValid) {
             return res.status(401).json({
                 success: false,
@@ -626,12 +708,16 @@ exports.disableTwoFactor = async (req, res, next) => {
             });
         }
 
-        user.twoFactorEnabled = false;
-        user.twoFactorVerified = false;
-        user.twoFactorCode = undefined;
-        user.twoFactorExpires = undefined;
-        user.phoneNumber = null;
-        await user.save();
+        await prisma.user.update({
+            where: { id: userId },
+            data: {
+                twoFactorEnabled: false,
+                twoFactorVerified: false,
+                twoFactorCode: null,
+                twoFactorExpires: null,
+                phoneNumber: null
+            }
+        });
 
         res.status(200).json({
             success: true,

@@ -1,5 +1,5 @@
 {
-  "name": "hacklab",
+  "name": "hackshield",
   "version": "1.0.0",
   "description": "",
   "homepage": "https://github.com/41M3Dev/HackLab#readme",
@@ -16,9 +16,14 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "nodemon src/server.js"
+    "start": "nodemon src/server.js",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:studio": "prisma studio",
+    "db:seed": "node scripts/seed.js"
   },
   "dependencies": {
+    "@prisma/client": "^6.5.0",
     "axios": "^1.13.2",
     "bcrypt": "^6.0.0",
     "body-parser": "^2.2.1",
@@ -29,10 +34,12 @@
     "helmet": "^8.1.0",
     "joi": "^18.0.2",
     "jsonwebtoken": "^9.0.3",
-    "mongoose": "^9.0.1",
     "morgan": "^1.10.1",
     "nodemailer": "^7.0.12",
     "twilio": "^5.11.1",
     "uuid": "^11.0.2"
+  },
+  "devDependencies": {
+    "prisma": "^6.5.0"
   }
 }

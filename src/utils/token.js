@@ -1,10 +1,10 @@
 const jwt = require('jsonwebtoken');
 
+// Changement Prisma : on utilise user.id (UUID) au lieu de user._id (ObjectId)
 exports.generateAccessToken = (user) => {
     return jwt.sign(
         {
-            id: user._id,
-            uuid: user.uuid,
+            id: user.id,
             role: user.role
         },
         process.env.JWT_ACCESS_SECRET,
@@ -12,9 +12,10 @@ exports.generateAccessToken = (user) => {
     );
 };
 
+// Changement Prisma : on utilise user.id (UUID) au lieu de user.uuid
 exports.generateRefreshToken = (user) => {
     return jwt.sign(
-        { uuid: user.uuid },
+        { id: user.id },
         process.env.JWT_REFRESH_SECRET,
         { expiresIn: '7d' }
     );
