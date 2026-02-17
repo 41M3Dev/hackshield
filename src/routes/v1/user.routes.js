@@ -28,7 +28,7 @@ const {
     updateUserValidator,
     updatePassword: updatePasswordValidator,
     adminUpdateUser: adminUpdateUserValidator
-} = require('../../validators/user.validator');
+} = require('../../validators/User.validator');
 
 /**
  * Admin routes
