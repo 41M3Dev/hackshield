@@ -1,4 +1,6 @@
-const User = require('../models/user.model');
+// Prisma remplace Mongoose — toutes les opérations DB utilisent prisma client
+const prisma = require('../config/db');
+const bcrypt = require('bcrypt');
 const { generateApiKey } = require('../utils/generator');
 
 /**
@@ -7,27 +9,34 @@ const { generateApiKey } = require('../utils/generator');
  */
 exports.createUser = async (req, res, next) => {
     try {
-        const user = await User.create({
-            email: req.body.email,
-            password: req.body.password,
-            firstName: req.body.firstName,
-            lastName: req.body.lastName,
-            username: req.body.username,
-            company: req.body.company,
-            // Champs admin uniquement
-            role: req.body.role || 'user',
-            plan: req.body.plan || 'free',
-            isActive: req.body.isActive !== undefined ? req.body.isActive : true,
-            emailVerified: true // Admin créé = email vérifié
+        // Hash du mot de passe dans le controller (plus de pre-save hook Mongoose)
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash(req.body.password, salt);
+
+        const user = await prisma.user.create({
+            data: {
+                email: req.body.email,
+                password: hashedPassword,
+                firstName: req.body.firstName,
+                lastName: req.body.lastName,
+                username: req.body.username,
+                company: req.body.company,
+                // Champs admin uniquement — mapping des valeurs vers les enums Prisma
+                role: (req.body.role || 'user').toUpperCase(),
+                plan: (req.body.plan || 'free').toUpperCase(),
+                isActive: req.body.isActive !== undefined ? req.body.isActive : true,
+                emailVerified: true // Admin créé = email vérifié
+            }
         });
 
-        const data = user.toObject();
-        delete data.password;
+        // Exclure le password de la réponse (remplace toObject/delete)
+        const { password, ...data } = user;
 
         res.status(201).json({ success: true, data });
     } catch (error) {
-        if (error.code === 11000) {
-            const field = Object.keys(error.keyPattern)[0];
+        // Erreur de contrainte unique Prisma (remplace error.code === 11000)
+        if (error.code === 'P2002') {
+            const field = error.meta?.target?.[0];
             return res.status(409).json({
                 success: false,
                 message: `${field === 'email' ? 'Cet email' : 'Ce nom d\'utilisateur'} est déjà utilisé`
@@ -42,7 +51,11 @@ exports.createUser = async (req, res, next) => {
  */
 exports.getUsers = async (req, res, next) => {
     try {
-        const users = await User.find({ isDeleted: false }).select('-password');
+        // Prisma select pour exclure le password (remplace .select('-password'))
+        const users = await prisma.user.findMany({
+            where: { isDeleted: false },
+            omit: { password: true }
+        });
 
         res.status(200).json({
             success: true,
@@ -59,7 +72,11 @@ exports.getUsers = async (req, res, next) => {
  */
 exports.getUserById = async (req, res, next) => {
     try {
-        const user = await User.findOne({ _id: req.params.id, isDeleted: false }).select('-password');
+        // prisma.findUnique remplace findOne avec _id (on utilise req.params.id = UUID)
+        const user = await prisma.user.findFirst({
+            where: { id: req.params.id, isDeleted: false },
+            omit: { password: true }
+        });
 
         if (!user) {
             return res.status(404).json({ message: 'User not found' });
@@ -76,7 +93,11 @@ exports.getUserById = async (req, res, next) => {
  */
 exports.getMe = async (req, res, next) => {
     try {
-        const user = await User.findOne({ _id: req.user.id, isDeleted: false }).select('-password');
+        // req.user.id au lieu de req.user._id
+        const user = await prisma.user.findFirst({
+            where: { id: req.user.id, isDeleted: false },
+            omit: { password: true }
+        });
 
         if (!user) {
             return res.status(401).json({ message: 'Invalid token or user deleted' });
@@ -101,23 +122,25 @@ exports.updateUser = async (req, res, next) => {
             if (req.body[field] !== undefined) updates[field] = req.body[field];
         });
 
-        const user = await User.findOne({ _id: req.params.id, isDeleted: false });
+        const user = await prisma.user.findFirst({
+            where: { id: req.params.id, isDeleted: false }
+        });
         if (!user) return res.status(404).json({ message: 'User not found' });
 
-        // Ajouter le mot de passe si présent
+        // Si mot de passe présent, le hasher manuellement (plus de pre-save hook)
         if (req.body.password) {
-            user.password = req.body.password; // sera hashé automatiquement par pre('save')
+            const salt = await bcrypt.genSalt(10);
+            updates.password = await bcrypt.hash(req.body.password, salt);
         }
 
-        // Appliquer les autres champs
-        Object.assign(user, updates);
+        // prisma.update remplace Object.assign + save
+        const updatedUser = await prisma.user.update({
+            where: { id: req.params.id },
+            data: updates,
+            omit: { password: true }
+        });
 
-        await user.save(); // déclenche pre-save pour hash
-
-        const userData = user.toObject();
-        delete userData.password;
-
-        res.status(200).json({ success: true, data: userData });
+        res.status(200).json({ success: true, data: updatedUser });
     } catch (error) {
         next(error);
     }
@@ -128,13 +151,17 @@ exports.updateUser = async (req, res, next) => {
  */
 exports.deleteUser = async (req, res, next) => {
     try {
-        const user = await User.findOneAndUpdate(
-            { _id: req.params.id, isDeleted: false },
-            { isDeleted: true, deletedAt: new Date() },
-            { new: true }
-        );
+        // prisma.update remplace findOneAndUpdate pour le soft delete
+        const user = await prisma.user.findFirst({
+            where: { id: req.params.id, isDeleted: false }
+        });
 
         if (!user) return res.status(404).json({ message: 'User not found or already deleted' });
+
+        await prisma.user.update({
+            where: { id: req.params.id },
+            data: { isDeleted: true, deletedAt: new Date() }
+        });
 
         res.status(204).send();
     } catch (error) {
@@ -149,10 +176,10 @@ exports.updatePassword = async (req, res, next) => {
     try {
         const { currentPassword, newPassword } = req.body;
 
-        const user = await User.findOne({
-            _id: req.user.id,
-            isDeleted: false
-        }).select('+password');
+        // req.user.id au lieu de req.user._id
+        const user = await prisma.user.findFirst({
+            where: { id: req.user.id, isDeleted: false }
+        });
 
         if (!user) {
             return res.status(404).json({
@@ -161,8 +188,8 @@ exports.updatePassword = async (req, res, next) => {
             });
         }
 
-        // Vérifier l'ancien mot de passe
-        const isPasswordValid = await user.comparePassword(currentPassword);
+        // Vérifier l'ancien mot de passe (bcrypt.compare direct)
+        const isPasswordValid = await bcrypt.compare(currentPassword, user.password);
         if (!isPasswordValid) {
             return res.status(401).json({
                 success: false,
@@ -170,13 +197,20 @@ exports.updatePassword = async (req, res, next) => {
             });
         }
 
+        // Hash du nouveau mot de passe (plus de pre-save hook)
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash(newPassword, salt);
+
         // Mettre à jour le mot de passe
-        user.password = newPassword;
+        await prisma.user.update({
+            where: { id: req.user.id },
+            data: { password: hashedPassword }
+        });
 
-        // Invalider tous les refresh tokens sauf le courant (forcer reconnexion autres appareils)
-        user.refreshTokens = [];
-
-        await user.save();
+        // Invalider tous les refresh tokens (suppression dans la table séparée)
+        await prisma.refreshToken.deleteMany({
+            where: { userId: req.user.id }
+        });
 
         res.status(200).json({
             success: true,
@@ -192,9 +226,8 @@ exports.updatePassword = async (req, res, next) => {
  */
 exports.generateUserApiKey = async (req, res, next) => {
     try {
-        const user = await User.findOne({
-            _id: req.user.id,
-            isDeleted: false
+        const user = await prisma.user.findFirst({
+            where: { id: req.user.id, isDeleted: false }
         });
 
         if (!user) {
@@ -206,8 +239,19 @@ exports.generateUserApiKey = async (req, res, next) => {
 
         // Générer une nouvelle API Key
         const apiKey = generateApiKey();
-        user.apiKey = apiKey;
-        await user.save();
+
+        // Supprimer les anciennes clés API de l'utilisateur puis créer la nouvelle
+        await prisma.apiKey.deleteMany({
+            where: { userId: req.user.id }
+        });
+
+        await prisma.apiKey.create({
+            data: {
+                key: apiKey,
+                scopes: ['scan:create', 'scan:read'],
+                userId: req.user.id
+            }
+        });
 
         res.status(200).json({
             success: true,
@@ -224,11 +268,9 @@ exports.generateUserApiKey = async (req, res, next) => {
  */
 exports.revokeApiKey = async (req, res, next) => {
     try {
-        const user = await User.findOneAndUpdate(
-            { _id: req.user.id, isDeleted: false },
-            { $unset: { apiKey: 1 } },
-            { new: true }
-        );
+        const user = await prisma.user.findFirst({
+            where: { id: req.user.id, isDeleted: false }
+        });
 
         if (!user) {
             return res.status(404).json({
@@ -236,6 +278,11 @@ exports.revokeApiKey = async (req, res, next) => {
                 message: 'Utilisateur non trouvé'
             });
         }
+
+        // Supprimer toutes les clés API de l'utilisateur (remplace $unset)
+        await prisma.apiKey.deleteMany({
+            where: { userId: req.user.id }
+        });
 
         res.status(200).json({
             success: true,
@@ -251,11 +298,9 @@ exports.revokeApiKey = async (req, res, next) => {
  */
 exports.logoutAll = async (req, res, next) => {
     try {
-        const user = await User.findOneAndUpdate(
-            { _id: req.user.id, isDeleted: false },
-            { refreshTokens: [] },
-            { new: true }
-        );
+        const user = await prisma.user.findFirst({
+            where: { id: req.user.id, isDeleted: false }
+        });
 
         if (!user) {
             return res.status(404).json({
@@ -263,6 +308,11 @@ exports.logoutAll = async (req, res, next) => {
                 message: 'Utilisateur non trouvé'
             });
         }
+
+        // Supprimer tous les refresh tokens (remplace refreshTokens: [])
+        await prisma.refreshToken.deleteMany({
+            where: { userId: req.user.id }
+        });
 
         res.status(200).json({
             success: true,
@@ -280,26 +330,38 @@ exports.adminUpdateUser = async (req, res, next) => {
     try {
         const allowed = [
             'firstName', 'lastName', 'company', 'email',
-            'role', 'plan', 'isActive', 'rateLimit', 'apiKeyScopes'
+            'role', 'plan', 'isActive', 'rateLimit'
         ];
         const updates = {};
 
         allowed.forEach(field => {
-            if (req.body[field] !== undefined) updates[field] = req.body[field];
+            if (req.body[field] !== undefined) {
+                // Convertir role et plan en majuscules pour les enums Prisma
+                if (field === 'role' || field === 'plan') {
+                    updates[field] = req.body[field].toUpperCase();
+                } else {
+                    updates[field] = req.body[field];
+                }
+            }
         });
 
-        const user = await User.findOneAndUpdate(
-            { _id: req.params.id, isDeleted: false },
-            updates,
-            { new: true, runValidators: true }
-        ).select('-password');
+        const existingUser = await prisma.user.findFirst({
+            where: { id: req.params.id, isDeleted: false }
+        });
 
-        if (!user) {
+        if (!existingUser) {
             return res.status(404).json({
                 success: false,
                 message: 'Utilisateur non trouvé'
             });
         }
+
+        // prisma.update remplace findOneAndUpdate (avec omit password au lieu de select('-password'))
+        const user = await prisma.user.update({
+            where: { id: req.params.id },
+            data: updates,
+            omit: { password: true }
+        });
 
         res.status(200).json({ success: true, data: user });
     } catch (error) {

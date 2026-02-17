@@ -3,6 +3,8 @@ const express = require('express');
 const helmet = require('helmet');
 const cors = require('cors');
 const morgan = require('morgan');
+// Prisma remplace Mongoose pour la connexion à PostgreSQL
+const prisma = require('./config/db');
 
 const app = express();
 
@@ -42,21 +44,20 @@ app.use((req, res) => {
 app.use((err, req, res, next) => {
     console.error('Erreur:', err);
 
-    // Erreur de validation Mongoose
-    if (err.name === 'ValidationError') {
-        return res.status(400).json({
-            success: false,
-            error: 'Erreur de validation',
-            details: Object.values(err.errors).map(e => e.message)
-        });
-    }
-
-    // Erreur de duplication (clé unique)
-    if (err.code === 11000) {
-        const field = Object.keys(err.keyPattern)[0];
+    // Erreur de validation Prisma (contrainte unique violée)
+    if (err.code === 'P2002') {
+        const field = err.meta?.target?.[0] || 'champ';
         return res.status(409).json({
             success: false,
             error: `Ce ${field} existe déjà`
+        });
+    }
+
+    // Erreur Prisma : enregistrement non trouvé
+    if (err.code === 'P2025') {
+        return res.status(404).json({
+            success: false,
+            error: 'Ressource non trouvée'
         });
     }
 
@@ -75,14 +76,6 @@ app.use((err, req, res, next) => {
         });
     }
 
-    // Erreur CastError (ID MongoDB invalide)
-    if (err.name === 'CastError') {
-        return res.status(400).json({
-            success: false,
-            error: 'ID invalide'
-        });
-    }
-
     // Erreur par défaut
     res.status(err.status || 500).json({
         success: false,
@@ -92,10 +85,16 @@ app.use((err, req, res, next) => {
     });
 });
 
-// Démarrage du serveur
+// Démarrage du serveur avec connexion Prisma
 const PORT = process.env.PORT || 9001;
-app.listen(PORT, () => {
-    console.log(`
+
+async function start() {
+    // Vérifier la connexion à PostgreSQL via Prisma
+    await prisma.$connect();
+    console.log('✅ Connecté à PostgreSQL via Prisma');
+
+    app.listen(PORT, () => {
+        console.log(`
 ╔═══════════════════════════════════════╗
 ║     HackLab API - Serveur lancé      ║
 ╠═══════════════════════════════════════╣
@@ -103,16 +102,37 @@ app.listen(PORT, () => {
 ║  Env:  ${(process.env.NODE_ENV || 'development').padEnd(30)} ║
 ║  URL:  http://localhost:${PORT.toString().padEnd(19)} ║
 ╚═══════════════════════════════════════╝
-    `);
+        `);
+    });
+}
+
+start().catch((err) => {
+    console.error('Erreur au démarrage:', err);
+    process.exit(1);
 });
 
 // Gestion des erreurs non catchées
 process.on('unhandledRejection', (err) => {
     console.error('Unhandled Rejection:', err);
-    process.exit(1);
+    // Déconnexion propre de Prisma avant arrêt
+    prisma.$disconnect().finally(() => process.exit(1));
 });
 
 process.on('uncaughtException', (err) => {
     console.error('Uncaught Exception:', err);
-    process.exit(1);
+    // Déconnexion propre de Prisma avant arrêt
+    prisma.$disconnect().finally(() => process.exit(1));
+});
+
+// Arrêt propre (SIGINT / SIGTERM)
+process.on('SIGINT', async () => {
+    console.log('\n🔌 Arrêt en cours...');
+    await prisma.$disconnect();
+    process.exit(0);
+});
+
+process.on('SIGTERM', async () => {
+    console.log('\n🔌 Arrêt en cours...');
+    await prisma.$disconnect();
+    process.exit(0);
 });

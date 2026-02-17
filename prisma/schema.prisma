@@ -1,0 +1,170 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                       String    @id @default(uuid())
+  username                 String    @unique
+  email                    String    @unique
+  password                 String
+  firstName                String?
+  lastName                 String?
+  company                  String?
+  role                     Role      @default(USER)
+  plan                     Plan      @default(FREE)
+  rateLimit                Int       @default(1000)
+  isActive                 Boolean   @default(true)
+  isDeleted                Boolean   @default(false)
+  deletedAt                DateTime?
+  lastLogin                DateTime?
+  emailVerified            Boolean   @default(false)
+  emailVerificationToken   String?
+  emailVerificationExpires DateTime?
+  resetPasswordToken       String?
+  resetPasswordExpires     DateTime?
+  loginAttempts            Int       @default(0)
+  lockUntil                DateTime?
+  phoneNumber              String?
+  twoFactorEnabled         Boolean   @default(false)
+  twoFactorCode            String?
+  twoFactorExpires         DateTime?
+  twoFactorVerified        Boolean   @default(false)
+  apiKeys                  ApiKey[]
+  refreshTokens            RefreshToken[]
+  targets                  Target[]
+  scans                    Scan[]
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
+}
+
+model ApiKey {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  scopes    String[]
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+}
+
+model Target {
+  id        String     @id @default(uuid())
+  name      String
+  type      TargetType
+  host      String
+  port      Int?
+  userId    String
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scans     Scan[]
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+}
+
+model Scan {
+  id         String     @id @default(uuid())
+  status     ScanStatus @default(PENDING)
+  userId     String
+  user       User       @relation(fields: [userId], references: [id])
+  targetId   String
+  target     Target     @relation(fields: [targetId], references: [id])
+  attacks    Attack[]
+  startedAt  DateTime?
+  finishedAt DateTime?
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+}
+
+model Attack {
+  id        String       @id @default(uuid())
+  type      AttackType
+  tool      String
+  status    AttackStatus @default(PENDING)
+  config    Json?
+  scanId    String
+  scan      Scan         @relation(fields: [scanId], references: [id], onDelete: Cascade)
+  result    Result?
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+}
+
+model Result {
+  id             String   @id @default(uuid())
+  success        Boolean
+  severity       Severity
+  output         Json?
+  recommendation String?
+  attackId       String   @unique
+  attack         Attack   @relation(fields: [attackId], references: [id], onDelete: Cascade)
+  createdAt      DateTime @default(now())
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String?
+  apiKeyId  String?
+  action    String
+  target    String?
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum Plan {
+  FREE
+  STARTER
+  PRO
+  ENTERPRISE
+}
+
+enum TargetType {
+  WEBSITE
+  SSH
+  FTP
+  WORDPRESS
+}
+
+enum ScanStatus {
+  PENDING
+  RUNNING
+  FINISHED
+  CANCELLED
+  FAILED
+}
+
+enum AttackType {
+  BRUTEFORCE
+  SQLI
+  XSS
+  UPLOAD
+}
+
+enum AttackStatus {
+  PENDING
+  RUNNING
+  SUCCESS
+  FAILED
+}
+
+enum Severity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
