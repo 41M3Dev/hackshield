@@ -1,0 +1,71 @@
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: hackshield-api
+    restart: unless-stopped
+    ports:
+      - "${PORT:-9001}:9001"
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: ${PORT:-9001}
+      DATABASE_URL: ${DATABASE_URL}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      API_KEY_PREFIX: ${API_KEY_PREFIX:-hs_}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    networks:
+      - hackshield-network
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: hackshield-postgres
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-hackshield}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+      POSTGRES_DB: ${POSTGRES_DB:-hackshield}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hackshield"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - hackshield-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: hackshield-redis
+    restart: always
+    networks:
+      - hackshield-network
+
+  worker:
+    image: kalilinux/kali-rolling
+    container_name: hackshield-worker
+    working_dir: /worker
+    volumes:
+      - ./worker:/worker
+    command: sh -c "sleep infinity"
+    depends_on:
+      - redis
+      - postgres
+    networks:
+      - hackshield-network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+
+networks:
+  hackshield-network:
+    driver: bridge
