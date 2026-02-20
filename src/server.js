@@ -22,7 +22,7 @@ app.use(express.urlencoded({ extended: true }));
 // Route racine
 app.get('/', (req, res) => {
     res.json({
-        message: 'Bienvenue sur HackLab API',
+        message: 'Bienvenue sur HackShield API',
         version: '1.0.0',
         documentation: '/api/v1'
     });
@@ -96,7 +96,7 @@ async function start() {
     app.listen(PORT, () => {
         console.log(`
 ╔═══════════════════════════════════════╗
-║     HackLab API - Serveur lancé      ║
+║     HackShield API - Serveur lancé      ║
 ╠═══════════════════════════════════════╣
 ║  Port: ${PORT.toString().padEnd(30)} ║
 ║  Env:  ${(process.env.NODE_ENV || 'development').padEnd(30)} ║
