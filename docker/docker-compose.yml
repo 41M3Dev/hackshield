@@ -62,7 +62,19 @@ services:
     networks:
       - hackshield-network
     restart: unless-stopped
-
+    
+  hackshield-front:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: https://dev.hackshield.dev/api/v1
+    container_name: hackshield-front
+    restart: unless-stopped
+    ports:
+      - "3080:80"
+    networks:
+      - hackshield-network
 volumes:
   postgres_data:
 
