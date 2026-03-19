@@ -1,0 +1,87 @@
+# ──────────────────────────────────────────────────────────────────
+# HackShield Worker — Kali Linux avec suite pentest complète
+# Ce container embarque tous les outils offensifs nécessaires
+# pour les scans automatisés lancés par l'API.
+# ──────────────────────────────────────────────────────────────────
+FROM kalilinux/kali-rolling
+
+# Éviter les prompts interactifs pendant l'install
+ENV DEBIAN_FRONTEND=noninteractive
+
+# ── Mise à jour des repos ──────────────────────────────────────────
+RUN apt-get update && apt-get upgrade -y
+
+# ── Outils individuels de pentest ──────────────────────────────────
+# Reconnaissance & Enumération
+#   nmap        — scanner de ports et services
+#   whatweb     — fingerprinting web
+#   wafw00f     — détection de WAF
+#   sublist3r   — énumération de sous-domaines
+#   curl        — requêtes HTTP/S
+#
+# Web Scanning & Fuzzing
+#   nikto       — scanner de vulnérabilités web
+#   gobuster    — brute-force de répertoires/DNS
+#   ffuf        — fuzzer web rapide
+#   dirb        — scanner de répertoires
+#
+# Injection & Exploitation
+#   sqlmap      — injection SQL automatisée
+#   commix      — injection de commandes OS
+#   xsser       — détection et exploitation XSS
+#
+# Proxy & Analyse
+#   burpsuite   — proxy d'interception (community edition)
+#   zaproxy     — OWASP ZAP proxy de sécurité
+#
+# CMS
+#   wpscan      — scanner WordPress
+#
+# Brute-force & Passwords
+#   hydra       — brute-force multi-protocoles
+#   medusa      — brute-force parallèle
+#   john        — John the Ripper (cracking hashes)
+#   hashcat     — cracking GPU/CPU
+#   crunch      — générateur de wordlists
+#   cewl        — générateur de wordlists depuis pages web
+#   hash-identifier — identification de type de hash
+RUN apt-get install -y --no-install-recommends \
+    nmap \
+    whatweb \
+    wafw00f \
+    nikto \
+    gobuster \
+    ffuf \
+    dirb \
+    sqlmap \
+    burpsuite \
+    zaproxy \
+    wpscan \
+    commix \
+    xsser \
+    sublist3r \
+    curl \
+    hydra \
+    medusa \
+    john \
+    hashcat \
+    crunch \
+    cewl \
+    hash-identifier \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# ── Méta-paquets Kali (outils web + passwords) ────────────────────
+# Ces méta-paquets installent des collections complètes d'outils
+# liés au web et au cracking de mots de passe.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    kali-tools-web \
+    kali-tools-passwords \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# ── Répertoire de travail ──────────────────────────────────────────
+WORKDIR /worker
+
+# Le container reste actif en attente de commandes de l'API
+CMD ["sleep", "infinity"]
