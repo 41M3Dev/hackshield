@@ -150,7 +150,7 @@ export default function LoginPage() {
         {/* Hint mock */}
         <div className="mt-4 p-3 rounded-xl bg-primary/[0.05] border border-primary/10 text-[11px] text-txt-muted">
           <p className="font-medium text-primary mb-1">Mode démo</p>
-          <p>Login : <span className="text-txt">admin@hackshield.dev</span></p>
+          <p>Identifiant : <span className="text-txt">admin@hackshield.dev</span></p>
           <p>Mot de passe : <span className="text-txt">Admin@2026!</span></p>
           <p>Code 2FA : <span className="text-txt">123456</span></p>
         </div>

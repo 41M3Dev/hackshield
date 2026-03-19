@@ -17,7 +17,7 @@ export default function ThreatTrendPanel() {
       {/* ── Header ─────────────────────────────────────────────── */}
       <div className="flex items-center justify-between px-5 pt-5 pb-3">
         <h2 className="text-[17px] font-semibold text-txt tracking-tight">
-          Threat Trend by Severity
+          Tendance des menaces par sévérité
         </h2>
         <button className="
           flex items-center gap-1.5 px-3 py-1.5 rounded-lg
@@ -26,7 +26,7 @@ export default function ThreatTrendPanel() {
           hover:text-txt transition-colors
         ">
           <CalendarDays size={12} className="text-primary" />
-          Last 7 Days
+          7 derniers jours
           <ChevronDown size={11} className="text-txt-muted" />
         </button>
       </div>

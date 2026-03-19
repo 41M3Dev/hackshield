@@ -178,17 +178,17 @@ export default function UsersPage() {
             <div>
               <label className="block text-[11px] font-medium text-txt-secondary mb-1.5">Rôle</label>
               <select value={form.role} onChange={e => setForm(f => ({ ...f, role: e.target.value as Role }))} className={inputClass}>
-                <option value="USER">User</option>
-                <option value="ADMIN">Admin</option>
+                <option value="USER">Utilisateur</option>
+                <option value="ADMIN">Administrateur</option>
               </select>
             </div>
             <div>
               <label className="block text-[11px] font-medium text-txt-secondary mb-1.5">Plan</label>
               <select value={form.plan} onChange={e => setForm(f => ({ ...f, plan: e.target.value as Plan }))} className={inputClass}>
-                <option value="FREE">Free</option>
-                <option value="STARTER">Starter</option>
+                <option value="FREE">Gratuit</option>
+                <option value="STARTER">Débutant</option>
                 <option value="PRO">Pro</option>
-                <option value="ENTERPRISE">Enterprise</option>
+                <option value="ENTERPRISE">Entreprise</option>
               </select>
             </div>
           </div>

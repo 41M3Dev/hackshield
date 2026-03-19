@@ -29,9 +29,9 @@ interface MenuSection {
 
 const sections: MenuSection[] = [
   {
-    title: 'OVERVIEW',
+    title: 'VUE D\'ENSEMBLE',
     items: [
-      { icon: <LayoutDashboard size={18} />, label: 'Dashboard', path: '/dashboard' },
+      { icon: <LayoutDashboard size={18} />, label: 'Tableau de bord', path: '/dashboard' },
     ],
   },
   {

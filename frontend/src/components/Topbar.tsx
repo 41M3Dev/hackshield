@@ -2,7 +2,7 @@ import { useLocation } from 'react-router-dom'
 import { Home, Search, Bell, RefreshCw, ChevronDown } from 'lucide-react'
 
 const pageTitles: Record<string, [string, string]> = {
-  '/dashboard': ['Dashboard', 'Real-Time Threat Intelligence Overview'],
+  '/dashboard': ['Tableau de bord', 'Vue d\'ensemble des menaces en temps réel'],
   '/targets': ['Cibles', 'Gestion des cibles de pentest'],
   '/scans': ['Scans', 'Suivi des scans de sécurité'],
   '/profile': ['Profil', 'Gérez vos informations personnelles'],
@@ -42,7 +42,7 @@ export default function Topbar() {
           <Search size={14} className="text-txt-muted mr-2 shrink-0" />
           <input
             type="text"
-            placeholder="Search"
+            placeholder="Rechercher"
             className="bg-transparent outline-none border-none text-xs text-txt placeholder:text-txt-muted/50 w-full"
           />
         </div>
@@ -63,7 +63,7 @@ export default function Topbar() {
           hover:text-txt hover:border-primary/20 transition-all duration-200
         ">
           <RefreshCw size={13} className="text-primary" />
-          <span>Refresh Data</span>
+          <span>Actualiser</span>
           <ChevronDown size={12} className="text-txt-muted ml-0.5" />
         </button>
       </div>

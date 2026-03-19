@@ -142,7 +142,7 @@ export default function TargetsPage() {
               onChange={e => setForm(f => ({ ...f, type: e.target.value as TargetType }))}
               className="w-full px-3 py-2 rounded-lg bg-bg border border-white/[0.08] text-sm text-txt outline-none focus:border-primary/40 transition-colors"
             >
-              <option value="WEBSITE">Website</option>
+              <option value="WEBSITE">Site web</option>
               <option value="SSH">SSH</option>
               <option value="FTP">FTP</option>
               <option value="WORDPRESS">WordPress</option>

@@ -2,7 +2,7 @@ import { ChevronDown, Eye } from 'lucide-react'
 
 /* ── Data mockée ───────────────────────────────────────────────── */
 interface Threat {
-  severity: 'Critical' | 'High' | 'Medium' | 'Low'
+  severity: 'Critique' | 'Élevé' | 'Moyen' | 'Faible'
   title: string
   type: string
   date: string
@@ -13,56 +13,56 @@ interface Threat {
 
 const threats: Threat[] = [
   {
-    severity: 'Critical',
-    title: 'Ransomware Attack',
+    severity: 'Critique',
+    title: 'Attaque Ransomware',
     type: 'Malware',
-    date: '29 Oct 2026',
-    source: 'External Ip192.168',
-    detected: 'Real-Time',
+    date: '29 oct. 2026',
+    source: 'IP externe 192.168',
+    detected: 'Temps réel',
     detectedHighlight: true,
   },
   {
-    severity: 'High',
-    title: 'Phishing Attempt',
-    type: 'Email THREAT',
-    date: '31 Oct 2026',
+    severity: 'Élevé',
+    title: 'Tentative de phishing',
+    type: 'Menace email',
+    date: '31 oct. 2026',
     source: 'mail.security.net',
-    detected: '2 hrs age',
+    detected: 'Il y a 2h',
     detectedHighlight: false,
   },
   {
-    severity: 'High',
-    title: 'Phishing Attempt',
-    type: 'Email THREAT',
-    date: '31 Oct 2026',
+    severity: 'Élevé',
+    title: 'Tentative de phishing',
+    type: 'Menace email',
+    date: '31 oct. 2026',
     source: 'mail.security.net',
-    detected: '2 hrs age',
+    detected: 'Il y a 2h',
     detectedHighlight: false,
   },
 ]
 
 /* ── Couleurs de sévérité ──────────────────────────────────────── */
 const severityStyles: Record<string, string> = {
-  Critical: 'text-accent bg-accent/10 border-accent/15',
-  High: 'text-amber-400 bg-amber-400/10 border-amber-400/15',
-  Medium: 'text-primary bg-primary/10 border-primary/15',
-  Low: 'text-txt-muted bg-white/5 border-white/10',
+  Critique: 'text-accent bg-accent/10 border-accent/15',
+  'Élevé': 'text-amber-400 bg-amber-400/10 border-amber-400/15',
+  Moyen: 'text-primary bg-primary/10 border-primary/15',
+  Faible: 'text-txt-muted bg-white/5 border-white/10',
 }
 
 /* ── Colonnes du tableau ───────────────────────────────────────── */
 const columns = [
-  { key: 'severity', label: 'Severity' },
-  { key: 'title', label: 'Title' },
+  { key: 'severity', label: 'Sévérité' },
+  { key: 'title', label: 'Titre' },
   { key: 'type', label: 'Type', sortable: true },
   { key: 'date', label: 'Date' },
   { key: 'source', label: 'Source' },
-  { key: 'detected', label: 'Detected' },
+  { key: 'detected', label: 'Détection' },
   { key: 'action', label: 'Action', sortable: true },
 ]
 
 /**
  * Tableau de menaces premium dark reproduisant fidèlement la référence.
- * En-tête discret, lignes « row card », badges, boutons View.
+ * En-tête discret, lignes « row card », badges, boutons Voir.
  */
 export default function ThreatTable() {
   return (
@@ -96,7 +96,7 @@ export default function ThreatTable() {
               transition-all duration-200
             "
           >
-            {/* Severity */}
+            {/* Sévérité */}
             <div>
               <span className={`
                 inline-block px-2.5 py-0.5 rounded-md text-[11px] font-semibold
@@ -106,7 +106,7 @@ export default function ThreatTable() {
               </span>
             </div>
 
-            {/* Title */}
+            {/* Titre */}
             <span className="text-[13px] font-medium text-txt truncate">{threat.title}</span>
 
             {/* Type */}
@@ -118,7 +118,7 @@ export default function ThreatTable() {
             {/* Source */}
             <span className="text-[12px] text-txt-secondary truncate">{threat.source}</span>
 
-            {/* Detected */}
+            {/* Détection */}
             <div>
               <span className={`
                 inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium
@@ -138,7 +138,7 @@ export default function ThreatTable() {
               hover:text-primary transition-colors
             ">
               <Eye size={13} />
-              View
+              Voir
             </button>
           </div>
         ))}

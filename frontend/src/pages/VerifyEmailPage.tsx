@@ -55,12 +55,12 @@ export default function VerifyEmailPage() {
                 <CheckCircle size={28} className="text-emerald-400" />
               </div>
               <h1 className="text-lg font-semibold text-txt mb-1">Email vérifié !</h1>
-              <p className="text-xs text-txt-muted">Redirection vers le dashboard...</p>
+              <p className="text-xs text-txt-muted">Redirection vers le tableau de bord...</p>
             </>
           )}
 
           <p className="text-xs text-txt-muted mt-5">
-            <Link to="/dashboard" className="text-primary hover:underline">Aller au dashboard</Link>
+            <Link to="/dashboard" className="text-primary hover:underline">Aller au tableau de bord</Link>
           </p>
         </div>
       </div>
