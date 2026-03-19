@@ -5,7 +5,12 @@
       "Bash(git commit:*)",
       "Bash(git push:*)",
       "Bash(cat:*)",
-      "Bash(npm install:*)"
+      "Bash(npm install:*)",
+      "Bash(find /Users/francoisbeauval/Desktop/Aimé/hackshield -not -path */node_modules/* -not -path */.git/* -type d)",
+      "Bash(wc -l /Users/francoisbeauval/Desktop/Aimé/hackshield/src/middlewares/*.js /Users/francoisbeauval/Desktop/Aimé/hackshield/src/config/*.js)",
+      "Bash(find /Users/francoisbeauval/Desktop/Aimé/hackshield/src -name \"*.js\" -exec wc -l {} +)",
+      "Bash(npm ls:*)",
+      "Bash(npm cache:*)"
     ],
     "deny": [],
     "ask": []
