@@ -3,6 +3,19 @@ const prisma = require('../config/db');
 const bcrypt = require('bcrypt');
 const { generateApiKey } = require('../utils/generator');
 
+// Champs sensibles à exclure de toutes les réponses utilisateur
+const OMIT_SENSITIVE = {
+    password: true,
+    emailVerificationToken: true,
+    emailVerificationExpires: true,
+    resetPasswordToken: true,
+    resetPasswordExpires: true,
+    twoFactorCode: true,
+    twoFactorExpires: true,
+    loginAttempts: true,
+    lockUntil: true,
+};
+
 /**
  * Create user (admin only)
  * Permet de définir role, plan, isActive contrairement à l'inscription publique
@@ -29,8 +42,10 @@ exports.createUser = async (req, res, next) => {
             }
         });
 
-        // Exclure le password de la réponse (remplace toObject/delete)
-        const { password, ...data } = user;
+        // Exclure tous les champs sensibles de la réponse
+        const { password, emailVerificationToken, emailVerificationExpires,
+                resetPasswordToken, resetPasswordExpires, twoFactorCode,
+                twoFactorExpires, loginAttempts, lockUntil, ...data } = user;
 
         res.status(201).json({ success: true, data });
     } catch (error) {
@@ -54,7 +69,7 @@ exports.getUsers = async (req, res, next) => {
         // Prisma select pour exclure le password (remplace .select('-password'))
         const users = await prisma.user.findMany({
             where: { isDeleted: false },
-            omit: { password: true }
+            omit: OMIT_SENSITIVE
         });
 
         res.status(200).json({
@@ -75,7 +90,7 @@ exports.getUserById = async (req, res, next) => {
         // prisma.findUnique remplace findOne avec _id (on utilise req.params.id = UUID)
         const user = await prisma.user.findFirst({
             where: { id: req.params.id, isDeleted: false },
-            omit: { password: true }
+            omit: OMIT_SENSITIVE
         });
 
         if (!user) {
@@ -96,7 +111,7 @@ exports.getMe = async (req, res, next) => {
         // req.user.id au lieu de req.user._id
         const user = await prisma.user.findFirst({
             where: { id: req.user.id, isDeleted: false },
-            omit: { password: true }
+            omit: OMIT_SENSITIVE
         });
 
         if (!user) {
@@ -137,7 +152,7 @@ exports.updateUser = async (req, res, next) => {
         const updatedUser = await prisma.user.update({
             where: { id: req.params.id },
             data: updates,
-            omit: { password: true }
+            omit: OMIT_SENSITIVE
         });
 
         res.status(200).json({ success: true, data: updatedUser });
@@ -360,7 +375,7 @@ exports.adminUpdateUser = async (req, res, next) => {
         const user = await prisma.user.update({
             where: { id: req.params.id },
             data: updates,
-            omit: { password: true }
+            omit: OMIT_SENSITIVE
         });
 
         res.status(200).json({ success: true, data: user });

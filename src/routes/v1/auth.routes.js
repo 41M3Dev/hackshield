@@ -3,6 +3,7 @@ const router = express.Router();
 
 // Middlewares
 const { authenticate } = require('../../middlewares/auth.middleware');
+const { authLimiter, passwordLimiter } = require('../../middlewares/rateLimit.middleware');
 
 // Controllers
 const {
@@ -40,8 +41,8 @@ const {
 /**
  * Public authentication routes
  */
-router.post('/register', validate(registerValidator), register);
-router.post('/login', validate(loginValidator), login);
+router.post('/register', authLimiter, validate(registerValidator), register);
+router.post('/login', authLimiter, validate(loginValidator), login);
 router.post('/refresh', validate(refreshTokenValidator), refreshToken);
 router.post('/logout', validate(logoutValidator), logout);
 
@@ -49,13 +50,13 @@ router.post('/logout', validate(logoutValidator), logout);
  * Email verification routes
  */
 router.post('/verify-email', validate(verifyEmailValidator), verifyEmail);
-router.post('/resend-verification', validate(resendVerificationValidator), resendVerificationEmail);
+router.post('/resend-verification', passwordLimiter, validate(resendVerificationValidator), resendVerificationEmail);
 
 /**
  * Password reset routes
  */
-router.post('/forgot-password', validate(forgotPasswordValidator), forgotPassword);
-router.post('/reset-password', validate(resetPasswordValidator), resetPassword);
+router.post('/forgot-password', passwordLimiter, validate(forgotPasswordValidator), forgotPassword);
+router.post('/reset-password', passwordLimiter, validate(resetPasswordValidator), resetPassword);
 
 /**
  * Two-Factor Authentication routes
