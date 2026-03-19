@@ -5,15 +5,32 @@ const cors = require('cors');
 const morgan = require('morgan');
 // Prisma remplace Mongoose pour la connexion à PostgreSQL
 const prisma = require('./config/db');
+const { apiLimiter } = require('./middlewares/rateLimit.middleware');
+const errorMiddleware = require('./middlewares/error.middleware');
+const logger = require('./config/logger');
 
 const app = express();
 
-// Middlewares de sécurité
-app.use(helmet());
-app.use(cors());
+// CORS — whitelist via variable d'environnement
+const allowedOrigins = (process.env.CORS_ORIGINS || 'http://localhost:3000')
+    .split(',')
+    .map(o => o.trim());
 
-// Logging
-app.use(morgan('dev'));
+app.use(helmet());
+app.use(cors({
+    origin: (origin, callback) => {
+        // Autoriser les requêtes sans origine (curl, Postman, server-to-server)
+        if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
+        callback(new Error(`Origin non autorisée par CORS: ${origin}`));
+    },
+    credentials: true
+}));
+app.use('/api', apiLimiter);
+
+// Logging HTTP via morgan — stream vers winston
+app.use(morgan('combined', {
+    stream: { write: (msg) => logger.info(msg.trim()) }
+}));
 
 // Body parser
 app.use(express.json());
@@ -41,98 +58,45 @@ app.use((req, res) => {
 });
 
 // Middleware de gestion d'erreur global
-app.use((err, req, res, next) => {
-    console.error('Erreur:', err);
-
-    // Erreur de validation Prisma (contrainte unique violée)
-    if (err.code === 'P2002') {
-        const field = err.meta?.target?.[0] || 'champ';
-        return res.status(409).json({
-            success: false,
-            error: `Ce ${field} existe déjà`
-        });
-    }
-
-    // Erreur Prisma : enregistrement non trouvé
-    if (err.code === 'P2025') {
-        return res.status(404).json({
-            success: false,
-            error: 'Ressource non trouvée'
-        });
-    }
-
-    // Erreur JWT
-    if (err.name === 'JsonWebTokenError') {
-        return res.status(401).json({
-            success: false,
-            error: 'Token invalide'
-        });
-    }
-
-    if (err.name === 'TokenExpiredError') {
-        return res.status(401).json({
-            success: false,
-            error: 'Token expiré'
-        });
-    }
-
-    // Erreur par défaut
-    res.status(err.status || 500).json({
-        success: false,
-        error: process.env.NODE_ENV === 'production'
-            ? 'Erreur serveur'
-            : err.message
-    });
-});
+app.use(errorMiddleware);
 
 // Démarrage du serveur avec connexion Prisma
 const PORT = process.env.PORT || 9001;
 
 async function start() {
-    // Vérifier la connexion à PostgreSQL via Prisma
     await prisma.$connect();
-    console.log('✅ Connecté à PostgreSQL via Prisma');
+    logger.info('Connecté à PostgreSQL via Prisma');
 
     app.listen(PORT, () => {
-        console.log(`
-╔═══════════════════════════════════════╗
-║     HackShield API - Serveur lancé      ║
-╠═══════════════════════════════════════╣
-║  Port: ${PORT.toString().padEnd(30)} ║
-║  Env:  ${(process.env.NODE_ENV || 'development').padEnd(30)} ║
-║  URL:  http://localhost:${PORT.toString().padEnd(19)} ║
-╚═══════════════════════════════════════╝
-        `);
+        logger.info(`HackShield API démarrée | port=${PORT} | env=${process.env.NODE_ENV || 'development'}`);
     });
 }
 
 start().catch((err) => {
-    console.error('Erreur au démarrage:', err);
+    logger.error('Erreur au démarrage', { stack: err.stack });
     process.exit(1);
 });
 
 // Gestion des erreurs non catchées
 process.on('unhandledRejection', (err) => {
-    console.error('Unhandled Rejection:', err);
-    // Déconnexion propre de Prisma avant arrêt
+    logger.error('Unhandled Rejection', { stack: err?.stack });
     prisma.$disconnect().finally(() => process.exit(1));
 });
 
 process.on('uncaughtException', (err) => {
-    console.error('Uncaught Exception:', err);
-    // Déconnexion propre de Prisma avant arrêt
+    logger.error('Uncaught Exception', { stack: err.stack });
     prisma.$disconnect().finally(() => process.exit(1));
 });
 
 // Arrêt propre (SIGINT / SIGTERM)
 process.on('SIGINT', async () => {
-    console.log('\n🔌 Arrêt en cours...');
+    logger.info('Arrêt en cours (SIGINT)...');
     await prisma.$disconnect();
     process.exit(0);
 });
 
 process.on('SIGTERM', async () => {
-    console.log('\n🔌 Arrêt en cours...');
+    logger.info('Arrêt en cours (SIGTERM)...');
     await prisma.$disconnect();
     process.exit(0);
 });

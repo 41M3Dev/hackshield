@@ -144,7 +144,7 @@ exports.login = async (req, res, next) => {
         }
 
         if (user.twoFactorEnabled) {
-            const twoFactorCode = Math.floor(100000 + Math.random() * 900000).toString();
+            const twoFactorCode = crypto.randomInt(100000, 1000000).toString();
             const twoFactorExpires = new Date(Date.now() + 10 * 60 * 1000);
 
             await prisma.user.update({
