@@ -55,6 +55,11 @@ services:
       dockerfile: Dockerfile.worker
     container_name: hackshield-worker
     working_dir: /worker
+    cap_add:
+      - NET_RAW
+      - NET_ADMIN
+    security_opt:
+      - seccomp:unconfined
     volumes:
       - ./worker:/worker
     depends_on:
