@@ -17,7 +17,7 @@ export default function SeverityPanel() {
       {/* ── Header ─────────────────────────────────────────────── */}
       <div className="flex items-center justify-between px-5 pt-5 pb-3">
         <h2 className="text-[17px] font-semibold text-txt tracking-tight">
-          Severity Distribution
+          Distribution par sévérité
         </h2>
         <button className="
           w-7 h-7 rounded-lg flex items-center justify-center
@@ -37,7 +37,7 @@ export default function SeverityPanel() {
       ">
         <TriShapeViz />
         <p className="text-[11px] text-txt-muted mt-3 mb-3">
-          Current threats by severity level
+          Menaces actuelles par niveau de sévérité
         </p>
       </div>
     </div>
@@ -163,7 +163,7 @@ function TriShapeViz() {
           fontWeight={600}
           fontFamily="Inter, sans-serif"
         >
-          Critical 25%
+          Critique 25%
         </text>
       </g>
 
@@ -179,7 +179,7 @@ function TriShapeViz() {
           fontWeight={600}
           fontFamily="Inter, sans-serif"
         >
-          High 40%
+          Élevé 40%
         </text>
       </g>
 
@@ -195,7 +195,7 @@ function TriShapeViz() {
           fontWeight={600}
           fontFamily="Inter, sans-serif"
         >
-          Low 15%
+          Faible 15%
         </text>
       </g>
     </svg>

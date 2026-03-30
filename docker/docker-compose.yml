@@ -50,12 +50,13 @@ services:
       - hackshield-network
 
   worker:
-    image: kalilinux/kali-rolling
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
     container_name: hackshield-worker
     working_dir: /worker
     volumes:
       - ./worker:/worker
-    command: sh -c "sleep infinity"
     depends_on:
       - redis
       - postgres

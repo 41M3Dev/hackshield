@@ -1,9 +1,8 @@
 import { Sparkles } from 'lucide-react'
 
 /**
- * Carte promotionnelle "Go Premium Now!" affichée en bas de la sidebar.
- * Reproduit fidèlement le design de la référence :
- * avatar en losange, texte centré, bouton gradient.
+ * Carte promotionnelle "Passez Premium !" affichée en bas de la sidebar.
+ * Avatar en losange, texte centré, bouton gradient.
  */
 export default function UpgradeCard() {
   return (
@@ -37,9 +36,9 @@ export default function UpgradeCard() {
       </div>
 
       {/* ── Texte ──────────────────────────────────────────────── */}
-      <h4 className="text-[13px] font-semibold text-txt mb-1">Go Premium Now!</h4>
+      <h4 className="text-[13px] font-semibold text-txt mb-1">Passez Premium !</h4>
       <p className="text-[11px] text-txt-secondary/70 leading-relaxed mb-4">
-        Upgrade to pro<br />for unlimited features!
+        Passez au plan Pro<br />pour des fonctionnalités illimitées !
       </p>
 
       {/* ── Bouton ─────────────────────────────────────────────── */}
@@ -53,7 +52,7 @@ export default function UpgradeCard() {
         transition-all duration-300
         active:scale-[0.98]
       ">
-        Upgrade Now
+        Passer au Premium
       </button>
     </div>
   )

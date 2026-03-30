@@ -1,23 +1,25 @@
+import { useLocation, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard,
   BarChart3,
   ShieldAlert,
-  Globe,
-  FileText,
-  Fingerprint,
-  AlertTriangle,
-  Bot,
+  Crosshair,
+  Scan,
+  User,
   Settings,
-  Building2,
+  Users,
+  FileText,
   Shield,
+  LogOut,
 } from 'lucide-react'
 import UpgradeCard from './UpgradeCard'
+import { useAuthStore } from '../store/authStore'
 
-/* ── Types ─────────────────────────────────────────────────────── */
 interface MenuItem {
   icon: React.ReactNode
   label: string
-  active?: boolean
+  path: string
+  adminOnly?: boolean
 }
 
 interface MenuSection {
@@ -25,49 +27,53 @@ interface MenuSection {
   items: MenuItem[]
 }
 
-/* ── Data ──────────────────────────────────────────────────────── */
 const sections: MenuSection[] = [
   {
-    title: 'OVERVIEW',
+    title: 'VUE D\'ENSEMBLE',
     items: [
-      { icon: <LayoutDashboard size={18} />, label: 'Dashboard', active: true },
-      { icon: <BarChart3 size={18} />, label: 'Analytics' },
+      { icon: <LayoutDashboard size={18} />, label: 'Tableau de bord', path: '/dashboard' },
     ],
   },
   {
-    title: 'Threats Intelligence',
+    title: 'Opérations',
     items: [
-      { icon: <ShieldAlert size={18} />, label: 'Threats' },
-      { icon: <Globe size={18} />, label: 'Sources' },
-      { icon: <FileText size={18} />, label: 'Reports' },
-      { icon: <Fingerprint size={18} />, label: 'Indicators' },
+      { icon: <Crosshair size={18} />, label: 'Cibles', path: '/targets' },
+      { icon: <Scan size={18} />, label: 'Scans', path: '/scans' },
     ],
   },
   {
-    title: 'Operations',
+    title: 'Compte',
     items: [
-      { icon: <AlertTriangle size={18} />, label: 'Alerts' },
-      { icon: <Bot size={18} />, label: 'SOCCo-Pilot' },
+      { icon: <User size={18} />, label: 'Profil', path: '/profile' },
+      { icon: <Settings size={18} />, label: 'Paramètres', path: '/settings' },
     ],
   },
   {
     title: 'Administration',
     items: [
-      { icon: <Settings size={18} />, label: 'Setting' },
-      { icon: <Building2 size={18} />, label: 'Company Directory' },
+      { icon: <Users size={18} />, label: 'Utilisateurs', path: '/admin/users', adminOnly: true },
+      { icon: <FileText size={18} />, label: 'Journal d\'audit', path: '/admin/audit', adminOnly: true },
     ],
   },
 ]
 
-/* ── Component ─────────────────────────────────────────────────── */
 export default function Sidebar() {
+  const location = useLocation()
+  const navigate = useNavigate()
+  const { user, logout } = useAuthStore()
+
+  const handleLogout = () => {
+    logout()
+    navigate('/login')
+  }
+
   return (
     <aside className="
       w-[230px] min-w-[230px] h-screen flex flex-col
       bg-[#0B1120] border-r border-white/[0.04]
       overflow-y-auto overflow-x-hidden
     ">
-      {/* ── Logo ───────────────────────────────────────────────── */}
+      {/* Logo */}
       <div className="flex items-center gap-2.5 px-5 pt-6 pb-5">
         <div className="
           w-8 h-8 rounded-lg flex items-center justify-center
@@ -82,53 +88,78 @@ export default function Sidebar() {
         </div>
       </div>
 
-      {/* ── Sections ───────────────────────────────────────────── */}
+      {/* Sections */}
       <nav className="flex-1 px-3 pb-4">
-        {sections.map((section) => (
-          <div key={section.title} className="mb-4">
-            {/* Titre de section */}
-            <p className="
-              px-2 mb-1.5 text-[10px] font-medium tracking-widest uppercase
-              text-txt-muted/70 select-none
-            ">
-              {section.title}
-            </p>
+        {sections.map((section) => {
+          const visibleItems = section.items.filter(
+            item => !item.adminOnly || user?.role === 'ADMIN'
+          )
+          if (visibleItems.length === 0) return null
 
-            {/* Items */}
-            {section.items.map((item) => (
-              <button
-                key={item.label}
-                className={`
-                  w-full flex items-center gap-2.5 px-3 py-[7px] rounded-lg
-                  text-[13px] font-medium transition-all duration-200
-                  ${item.active
-                    ? `
-                      bg-primary/[0.12] text-txt
-                      border border-primary/20
-                      shadow-[0_0_16px_rgba(139,92,246,0.08)]
-                    `
-                    : `
-                      text-txt-secondary hover:text-txt/90
-                      hover:bg-white/[0.03] border border-transparent
-                    `
-                  }
-                `}
-              >
-                <span className={item.active ? 'text-primary' : 'text-txt-muted'}>{item.icon}</span>
-                <span>{item.label}</span>
-                {/* Point lumineux pour l'item actif */}
-                {item.active && (
-                  <span className="ml-auto w-1.5 h-1.5 rounded-full bg-primary shadow-[0_0_6px_rgba(139,92,246,0.6)]" />
-                )}
-              </button>
-            ))}
-          </div>
-        ))}
+          return (
+            <div key={section.title} className="mb-4">
+              <p className="
+                px-2 mb-1.5 text-[10px] font-medium tracking-widest uppercase
+                text-txt-muted/70 select-none
+              ">
+                {section.title}
+              </p>
+
+              {visibleItems.map((item) => {
+                const active = location.pathname === item.path ||
+                  (item.path !== '/dashboard' && location.pathname.startsWith(item.path))
+
+                return (
+                  <button
+                    key={item.path}
+                    onClick={() => navigate(item.path)}
+                    className={`
+                      w-full flex items-center gap-2.5 px-3 py-[7px] rounded-lg
+                      text-[13px] font-medium transition-all duration-200
+                      ${active
+                        ? `
+                          bg-primary/[0.12] text-txt
+                          border border-primary/20
+                          shadow-[0_0_16px_rgba(139,92,246,0.08)]
+                        `
+                        : `
+                          text-txt-secondary hover:text-txt/90
+                          hover:bg-white/[0.03] border border-transparent
+                        `
+                      }
+                    `}
+                  >
+                    <span className={active ? 'text-primary' : 'text-txt-muted'}>{item.icon}</span>
+                    <span>{item.label}</span>
+                    {active && (
+                      <span className="ml-auto w-1.5 h-1.5 rounded-full bg-primary shadow-[0_0_6px_rgba(139,92,246,0.6)]" />
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+          )
+        })}
       </nav>
 
-      {/* ── Upgrade Card en bas ────────────────────────────────── */}
-      <div className="px-3 pb-4 mt-auto">
+      {/* Bottom: user + logout */}
+      <div className="px-3 pb-4 mt-auto space-y-3">
         <UpgradeCard />
+
+        {user && (
+          <div className="flex items-center gap-2.5 px-2 py-2">
+            <div className="w-7 h-7 rounded-full bg-gradient-to-br from-primary/40 to-accent/40 flex items-center justify-center text-white text-[11px] font-bold">
+              {user.firstName?.[0] || user.username[0].toUpperCase()}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-medium text-txt truncate">{user.firstName || user.username}</p>
+              <p className="text-[10px] text-txt-muted truncate">{user.email}</p>
+            </div>
+            <button onClick={handleLogout} className="p-1.5 rounded-lg hover:bg-white/[0.05] text-txt-muted hover:text-red-400 transition-colors" title="Déconnexion">
+              <LogOut size={14} />
+            </button>
+          </div>
+        )}
       </div>
     </aside>
   )
